@@ -24,7 +24,7 @@ import numpy as np
 import argparse
 import os
 
-# Các tham số đầu vào
+# Input parameters
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", required=True,
 	help="path to input dataset")
@@ -35,49 +35,51 @@ ap.add_argument("-m", "--model", type=str,
 	help="path to output face mask detector model")
 args = vars(ap.parse_args())
 
-# Đặt init learning rate, số epochs, batch_size
+# Set init learning rate, number of epochs, batch_size
 INIT_LR = 1e-4
 EPOCHS = 20
 BS = 32
 
-# lấy list images từ thư mục dataset, sau đó khởi tạo
-# list data(images,...) và class images
+# get list images from dataset folder, then initialize
+# list data(images,...) and class images
 
 print("[INFO] loading images...")
 imagePaths = list(paths.list_images(args["dataset"]))
 data = []
 labels = []
 
-# lặp qua các đường dẫn
+
+# iterate over paths
 for imagePath in imagePaths:
-	# lấy ra class label từ filename
+	# get class label from filename
 	label = imagePath.split(os.path.sep)[-2]
 
 	print(imagePath)
 
-	# load ảnh đầu vào(224x224) và xử lí
+	# load input image(224x224) and process
 	image = load_img(imagePath, target_size=(224, 224))
 	image = img_to_array(image)
 	image = preprocess_input(image) #scale về [-1,1]
 
-	# thêm vào data và labels list tương ứng
+	
+# add data and labels list respectively
 	data.append(image)
 	labels.append(label)
 
-# chuyển data và labels list sang Numpy arrays
+# convert data and labels list to Numpy arrays
 data = np.array(data, dtype="float64")
 labels = np.array(labels)
 
-# chuyển label sang dạng one-hot encoding
+# convert labels to one-hot encoding
 lb = LabelBinarizer()
 labels = lb.fit_transform(labels)
 labels = to_categorical(labels)
 
-# chia tập data thành 80% tập train và 20% tập test
+# divide the data set into 80% of the training set and 20% of the test set
 (trainX, testX, trainY, testY) = train_test_split(data, labels,
 	test_size=0.20, stratify=labels, random_state=42)
 
-# sinh thêm dữ liệu bằng data augmentation
+# generate more data by data augmentation
 aug = ImageDataGenerator(
 	rotation_range=20,
 	zoom_range=0.15,
@@ -87,11 +89,11 @@ aug = ImageDataGenerator(
 	horizontal_flip=True,
 	fill_mode="nearest")
 
-# load MobileNetV2 network cho fine-tuning (bỏ đi head FC layer)
+# load MobileNetV2 network for fine-tuning (remove head FC layer)
 baseModel = MobileNetV2(weights="imagenet", include_top=False,
 	input_tensor=Input(shape=(224, 224, 3)))
 
-# xây phần head của model (fine-tuning)
+# build the model's head (fine-tuning)
 headModel = baseModel.output
 headModel = AveragePooling2D(pool_size=(7, 7))(headModel)
 headModel = Flatten(name="flatten")(headModel)
@@ -99,10 +101,11 @@ headModel = Dense(128, activation="relu")(headModel)
 headModel = Dropout(0.5)(headModel)
 headModel = Dense(2, activation="softmax")(headModel)
 
-# đặt phần head vừa xây vào đầu của model load
+
+# put the newly built head at the top of the load model
 model = Model(inputs=baseModel.input, outputs=headModel)
 
-# lặp qua các layer cơ sở của model MobileNetV2 và đóng băng để ko cập nhật hệ số những layer này
+# loop through the base layers of the MobileNetV2 model and freeze to not update these layers
 for layer in baseModel.layers:
 	layer.trainable = False
 
@@ -121,22 +124,24 @@ H = model.fit(
 	validation_steps=len(testX) // BS,
 	epochs=EPOCHS)
 
-# thử predict trên tập test
+
+# try predict on test set
 print("[INFO] evaluating network...")
 predIdxs = model.predict(testX, batch_size=BS)
 
-# với mỗi ảnh predict đưa ra label có xác suất lớn nhất được dự đoán tương ứng
+
+# for each image predict gives the label with the corresponding highest probability of being predicted
 predIdxs = np.argmax(predIdxs, axis=1)
 
 # show classification report
 print(classification_report(testY.argmax(axis=1), predIdxs,
 	target_names=lb.classes_))
 
-# save model lại
+# save model again
 print("[INFO] saving mask detector model...")
 model.save(args["model"], save_format="h5")
 
-# plot trainning loss và accuracy, lưu lại plot này
+# plot training loss and accuracy, save this plot
 N = EPOCHS
 plt.style.use("ggplot")
 plt.figure()
