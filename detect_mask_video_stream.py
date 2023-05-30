@@ -15,57 +15,71 @@ import os
 
 
 def detect_and_predict_mask(frame, faceNet, maskNet):
-    # grab the dimensions of the frame và chuyển sang blod
+    
+# grab the dimensions of the frame and convert to bold
     (h, w) = frame.shape[:2]
     blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300),
                                  (104.0, 177.0, 123.0))
 
-    # cho blod qua model và detect face
+    
+# for bold via model and detect face
     faceNet.setInput(blob)
     detections = faceNet.forward()
 
-    # khởi tạo các list faces, locations tương ứng, predicts tương ứng từ model
+   
+# initialize the corresponding list faces, locations, and predicts from mode
     faces = []
     locs = []
     preds = []
 
-    # lặp qua các detections
+   
+# loop through the detections
     for i in range(0, detections.shape[2]):
-        # lấy ra độ tin cậy (xác suất,...) tương ứng của mỗi detection
+       
+# get the corresponding confidence (probability,...) of each detection
         confidence = detections[0, 0, i, 2]
 
-        # lọc ra các detections đảm bảo độ tin cậy > ngưỡng tin cậy
+       
+# filter out reliable detections > confidence threshold
         if confidence > args["confidence"]:
-            # tính toán (x,y) bounding box
+            
+# calculate (x,y) bounding box
             box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
             (startX, startY, endX, endY) = box.astype("int")
 
-            # đảm bảo bounding box nằm trong kích thước frame
+            
+# make sure the bounding box is within the frame size
             (startX, startY) = (max(0, startX), max(0, startY))
             (endX, endY) = (min(w - 1, endX), min(h - 1, endY))
 
-            # trích ra face ROI, chuyển image từ BGR sang RGB, resize về 224x224 và preprocess
+            
+# extract face ROI, convert image from BGR to RGB, resize to 224x224 and preprocess
             face = frame[startY:endY, startX:endX]
             face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
             face = cv2.resize(face, (224, 224))
             face = img_to_array(face)
             face = preprocess_input(face)
 
-            # thêm face và bounding box tương ứng vào các list
+            
+# add the corresponding face and bounding box to the lists
             faces.append(face)
             locs.append((startX, startY, endX, endY))
 
-    # chỉ prediction nếu ít detect đc ít nhất 1 face
+    
+# only predict if it detects at least 1 face
     if len(faces) > 0:
-        # để nhanh hơn thì predict trên tất cả face thay vì predict trên từng face dùng vòng lặp
+        
+# to make it faster, predict on all faces instead of predicting on each face using a loop
         faces = np.array(faces, dtype="float32")
         preds = maskNet.predict(faces, batch_size=32)
 
-    # return 2-tuple chứa location và predict tương ứng của chúng
+    
+# return 2-tuple containing their respective locations and predict# return 2-tuple containing their respective locations and predict
     return (locs, preds)
 
 
-# các tham số đầu vào
+
+# input parameters
 ap = argparse.ArgumentParser()
 ap.add_argument("-f", "--face", type=str,
                 default="face_detector",
@@ -77,45 +91,54 @@ ap.add_argument("-c", "--confidence", type=float, default=0.5,
                 help="minimum probability to filter weak detections")
 args = vars(ap.parse_args())
 
-# load face detector model từ thư mục
+# load face detector model from directory
+
 print("[INFO] loading face detector model...")
 prototxtPath = os.path.sep.join([args["face"], "deploy.prototxt"])
 weightsPath = os.path.sep.join([args["face"],
                                 "res10_300x300_ssd_iter_140000.caffemodel"])
 faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
 
+
 # load face mask detector model đã train
 print("[INFO] loading face mask detector model...")
 maskNet = load_model(args["model"])
 
-# khởi tạo video stream và cho phép bật webcam
+
+# initiate video stream and enable webcam
 print("[INFO] starting video stream...")
 vs = VideoStream(src=0).start()
 time.sleep(2.0)
 
-# lặp qua các frames từ video stream
+
+# loop through frames from video stream
 while True:
-    # cắt frame từ video và resize về tối đa width 400 pixel
+    # crop frame from video and resize to max width 400 pixels
     frame = vs.read()
     frame = imutils.resize(frame, width=800)
 
-    # detect faces in the frame và xác định là mask or no mask
+    
+# detect faces in the frame and define as mask or no mask
+
     (locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
 
-    # lặp qua các bounding box khuôn mặt được phát hiện và predict tương ứng của chúng
+   
+# iterate over the bounding boxes of detected faces and their corresponding predict
     for (box, pred) in zip(locs, preds):
         # unpack the bounding box and predictions
         (startX, startY, endX, endY) = box
         (mask, withoutMask) = pred
 
-        # xác định class label và color để vẽ bounding box và text
+       
+# define class label and color to draw bounding box and text
         label = "Mask" if mask > withoutMask else "No Mask"
         color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
 
-        # đính thêm thông tin về xác suất(probability) của label
+       
+# attach more information about the probability (probability) of the label
         label = "{}: {:.2f}%".format(label, max(mask, withoutMask) * 100)
 
-        # display label và bounding box hình chữ nhật trên output frame
+        # display label and bounding box rectangle on output frame
         cv2.putText(frame, label, (startX, startY - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
         cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
@@ -124,7 +147,8 @@ while True:
     cv2.imshow("FACE_MASK_DETECTOR_TL", frame)
     key = cv2.waitKey(1) & 0xFF
 
-    # nhấn q để thoát
+    
+# press q to exit
     if key == ord("q"):
         break
 
