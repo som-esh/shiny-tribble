@@ -1,31 +1,32 @@
 import os
 import cv2  #
-import base64  # sử dụng để mã hóa ảnh dưới dạng string
-import imutils  # thư viện xử lí ảnh dễ hơn
+import base64  # used to encode images as string
+import imutils # easier image processing library
 import numpy as np  #
 from matplotlib import pyplot as plt  #
 
 
 def draw_rectangle(image, face):
     (start_x, start_y, end_x, end_y) = face["rect"]
-    # xác định màu sẽ được vẽ
+    # define the color to be drawn
     detection_rect_color_rgb = (0, 255, 255)
-    # vẽ ô chữ nhật bao quanh
+    # draw a rectangle around
     cv2.rectangle(img=image,
                   pt1=(start_x, start_y),
                   pt2=(end_x, end_y),
                   color=detection_rect_color_rgb,
                   thickness=2)
 
-    # hiển thị xác suất nhận diện
+    # show the probability of identification
     if (face["recognition_prob"] != []):
         #
         text = "{}: {:.2f}%".format(face["name"], face["recognition_prob"])
-        # vị trí vẽ
+        # drawing position
         y = start_y - 10 if start_y - 10 > 10 else start_y + 10
-        # màu vẽ
+        
+# painting color
         probability_color_rgb = (0, 255, 255)
-        # vẽ
+        # draw
         cv2.putText(img=image,
                     text=text,
                     org=(start_x, y),
@@ -36,12 +37,12 @@ def draw_rectangle(image, face):
 
 
 def draw_rectangles(image, faces):
-    # vẽ ô chữ nhật trên mỗi face được detect
+# draw a rectangle on each detected face
     if len(faces) == 0:
         num_faces = 0
     else:
         num_faces = len(faces)
-        # vẽ ô chữ nhật
+        # draw a rectangle
         for face in faces:
             draw_rectangle(image, face)
     return num_faces, image
